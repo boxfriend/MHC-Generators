@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.Text;
 namespace MHC_Generators
 {
     [Generator]
-    public class EnemyEnumGenerator : ISourceGenerator
+    internal class EnemyEnumGenerator : ISourceGenerator
     {
         public void Execute (GeneratorExecutionContext context)
         {
