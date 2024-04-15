@@ -13,6 +13,7 @@ namespace MHC_Generators
     internal sealed class SaveDataGenerator : ISourceGenerator
     {
         private const string _saveAttribute = "Save";
+        private const string _namespace = "Boxfriend.Generators";
 
         private const string _attribute = @"
 using System;
@@ -26,10 +27,37 @@ namespace Boxfriend.Generators
 }
 ";
 
+        public const string _iSaveInterface = @"
+namespace Boxfriend.Generators
+{
+    public interface ISaveable<T> where T : ISaveData
+    {
+        public T ToSaveData();
+        public System.Threading.Tasks.Task<bool> TrySaveData(string path, System.Threading.CancellationToken cancellationToken);
+    }
+}
+";
+
+        public const string _iLoadInterface = @"
+namespace Boxfriend.Generators
+{
+    public interface ILoadable<T> where T : ISaveData
+    {
+        public void ApplySaveData(T data);
+        public System.Threading.Tasks.Task<bool> TryLoadData(string path, System.Threading.CancellationToken cancellationToken);
+    }
+}
+";
+        public const string _iSaveDataInterface = @"
+namespace Boxfriend.Generators
+{
+    public interface ISaveData { }
+}
+";
         public void Execute (GeneratorExecutionContext context)
         {
             var saveClasses = ((SaveDataSyntaxReceiver)context.SyntaxReceiver)?.SaveClasses;
-                
+
             if (saveClasses is null)
                 return;
 
@@ -52,7 +80,7 @@ namespace Boxfriend.Generators
                 BuildLoadMethod(className, members, dataBuilder);
                 context.AddSource($"{saveClass.Identifier}.FromData.g.cs", SourceText.From(dataBuilder.ToString(), Encoding.UTF8));
                 dataBuilder.Clear();
-            }
+                }
         }
         private void BuildSaveStruct (string className, IEnumerable<(string Type, string Identifier)> members, StringBuilder builder)
         {
@@ -60,7 +88,7 @@ namespace Boxfriend.Generators
 namespace Boxfriend.Generators
 {{
     [System.Serializable]
-    public struct {className}SaveData
+    public struct {className}SaveData : ISaveData
     {{
 ");
             foreach(var (Type, Identifier) in members)
@@ -82,8 +110,8 @@ namespace Boxfriend.Generators
 
         private void BuildSaveMethod(string  className, IEnumerable<(string Type, string Identifier)> members, StringBuilder builder)
         {
-            builder.AppendLine($"public partial class {className}\n{{");
-            var saveName = $"Boxfriend.Generators.{className}SaveData";
+            var saveName = $"{_namespace}.{className}SaveData";
+            builder.AppendLine($"public partial class {className} : {_namespace}.ISaveable<{saveName}>\n{{");
             builder.AppendLine($"\tpublic {saveName} ToSaveData()\n\t{{");
             builder.AppendLine($"\t\tvar data = new {saveName}();");
             foreach(var (_, Identifier) in members)
@@ -92,34 +120,34 @@ namespace Boxfriend.Generators
             }
             builder.AppendLine($"\t\treturn data;\n\t}}");
 
-            builder.AppendLine($@"
+            builder.AppendLine(@"
     public async System.Threading.Tasks.Task<bool> TrySaveData(string path, System.Threading.CancellationToken cancellationToken)
-    {{
+    {
         var data = ToSaveData();
         try
-        {{
+        {
             var json = Newtonsoft.Json.JsonConvert.SerializeObject(data);
             using var writer = new System.IO.StreamWriter(path);
             await writer.WriteAsync(json);
             writer.Close();
-        }}
+        }
         catch (System.Exception ex)
-        {{
+        {
 #if UNITY_2021_1_OR_NEWER
             UnityEngine.Debug.LogException(ex);
 #endif
             return false;
-        }}
+        }
         return true;
-    }}
-}}
+    }
+}
 ");
         }
 
         private void BuildLoadMethod (string className, IEnumerable<(string Type, string Identifier)> members, StringBuilder builder)
         {
-            builder.AppendLine($"public partial class {className}\n{{");
-            var saveName = $"Boxfriend.Generators.{className}SaveData";
+            var saveName = $"{_namespace}.{className}SaveData";
+            builder.AppendLine($"public partial class {className} : {_namespace}.ILoadable<{saveName}>\n{{");
             builder.AppendLine($"\tpublic void ApplySaveData({saveName} data)\n\t{{");
             foreach (var (_, Identifier) in members)
             {
@@ -179,8 +207,16 @@ namespace Boxfriend.Generators
 
         public void Initialize (GeneratorInitializationContext context)
         {
-            context.RegisterForPostInitialization(x => x.AddSource("SaveAttributes.g.cs", _attribute));
+            context.RegisterForPostInitialization(PostInit);
             context.RegisterForSyntaxNotifications(() => new SaveDataSyntaxReceiver());
+        }
+
+        private void PostInit(GeneratorPostInitializationContext ctx)
+        {
+            ctx.AddSource("SaveAttributes.g.cs", _attribute);
+            ctx.AddSource("ISaveData.g.cs", _iSaveDataInterface);
+            ctx.AddSource("ISaveable.g.cs", _iSaveInterface);
+            ctx.AddSource("ILoadable.g.cs", _iLoadInterface);
         }
     }
 
