@@ -101,6 +101,7 @@ namespace Boxfriend.Generators
             var json = Newtonsoft.Json.JsonConvert.SerializeObject(data);
             using var writer = new System.IO.StreamWriter(path);
             await writer.WriteAsync(json);
+            writer.Close();
         }}
         catch (System.Exception ex)
         {{
@@ -133,6 +134,7 @@ namespace Boxfriend.Generators
         {{
             using var reader = new System.IO.StreamReader(path);
             var data = await reader.ReadToEndAsync();
+            reader.Close();
             var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<{saveName}>(data);
             ApplySaveData(obj);
         }}
